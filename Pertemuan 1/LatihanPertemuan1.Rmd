@@ -1,9 +1,10 @@
-## Latihan MPDW
+## Data MPDW
 
-Dalam hal ini akan dibuat variabel x yang bernilai 3
+# Data Time Series
+Data Time Series Harga Beras Super II Provinsi dari 2 Januari 2023 hingga 31 Juli 2025
 
 ```{r}
-x=4
-x
+dt <- read_xlsx <- read_excel("E:\\Atha's Documents\\IPB\\smt 5\\Data Harga Beras Super II Provinsi.xlsx")
+dt
 ```
 
