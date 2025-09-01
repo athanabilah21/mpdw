@@ -1,0 +1,327 @@
+---
+title: "Latihan 100 Data"
+output: html_document
+---
+# Library
+```{r}
+library("forecast")
+library("graphics")
+library("TTR")
+library("TSA")
+library("rio")
+library("zoo")
+library("ggplot2")
+```
+# Impor Data
+```{r}
+data1 <- import("https://raw.githubusercontent.com/kamaldims/MPDW/main/Kurs%20Jual%20Rataan%20USD%20Fix.xlsx")
+```
+
+
+# Ambil Data
+Mengambil data 209 - 312
+```{r}
+data2 <- data1[209:312, ]
+```
+
+
+# Eksplorasi Data
+```{r}
+str(data2)
+dim(data2)
+summary(data2$`Kurs Jual Rataan`)
+```
+## Mengubah Data ke Time Series
+```{r}
+data2.ts <- ts(data2$'Kurs Jual Rataan')
+```
+
+## Mengubah Data ke Time Series
+```{r}
+data2.ts <- ts(data2$`Kurs Jual Rataan`)
+```
+
+## Membuat Plot Data Deret Waktu
+```{r}
+ts.plot(data2.ts, xlab="Periode", ylab="Kurs Jual Rataan", 
+        main = "Time Series Plot")
+points(data2.ts)
+```
+
+# Single Moving Average & Double Moving Average
+
+## Pembagian Data
+Pembagian data latih dan data uji dilakukan dengan perbandingan 80% data latih dan 20% data uji.
+```{r}
+training <- data2[1:82,]
+testing <- data2[83:104,]
+training.ts <- ts(training$`Kurs Jual Rataan`)
+testing.ts <- ts(testing$`Kurs Jual Rataan`)
+```
+
+
+## Eksplorasi Data
+```{r}
+plot(data2.ts, col="red",main="Plot semua data"); points(data2.ts)
+plot(training.ts, col="blue",main="Plot data latih"); points(training.ts)
+plot(testing.ts, col="blue",main="Plot data uji"); points(testing.ts)
+
+ggplot() +
+  geom_line(data = training, aes(x = `Minggu Ke-`, y = `Kurs Jual Rataan`, color = "Data Latih")) +
+  geom_line(data = testing, aes(x = `Minggu Ke-`, y = `Kurs Jual Rataan`, color = "Data Uji")) +
+  scale_color_manual(values = c("Data Latih" = "blue", "Data Uji" = "red")) +
+  labs(x = "Minggu Ke-", y = "Kurs Jual Rataan", color = "Keterangan") +
+  theme_bw() + theme(legend.position = "bottom")
+```
+
+## Single Moving Average
+```{r}
+# Hitung SMA (k = 3)
+data2$SMA <- rollmean(data2$`Kurs Jual Rataan`, k = 3, fill = NA, align = "right")
+# Ramalan (lag 1)
+data2$Ramalan_SMA <- c(NA, head(data2$SMA, -1))
+
+data_sma <- data.frame(
+  Minggu = data2$`Minggu Ke-`,
+  Aktual = data2$`Kurs Jual Rataan`,
+  SMA = data2$SMA,
+  Ramalan = data2$Ramalan_SMA
+)
+```
+
+### Plot Deret Waktu
+```{r}
+ts.plot(data_sma$Aktual, xlab="Minggu Ke-", ylab="Kurs Jual Rataan",
+        main="SMA N=3 Kurs Jual Rataan", col="black", lwd=1)
+lines(data_sma$SMA, col="green", lwd=2)
+lines(data_sma$Ramalan, col="red", lwd=2)
+legend("topleft",
+       legend=c("Data Aktual","Data Pemulusan (SMA)","Data Ramalan"),
+       lty=1, col=c("black","green","red"), cex=0.8)
+```
+
+### Akurasi SMA
+```{r}
+# 1) AKURASI DATA LATIH
+ramalan_train_sma <- data2$Ramalan_SMA[1:82]
+idx_tr_sma <- which(!is.na(ramalan_train_sma))                 # buang NA awal
+err_train_sma <- training.ts[idx_tr_sma] - ramalan_train_sma[idx_tr_sma]
+
+SSE_train_sma  <- sum(err_train_sma^2)
+MSE_train_sma  <- mean(err_train_sma^2)
+MAPE_train_sma <- mean(abs(err_train_sma / training.ts[idx_tr_sma]) * 100)
+
+akurasi_train_sma <- c(SSE = SSE_train_sma,
+                       MSE = MSE_train_sma,
+                       MAPE = MAPE_train_sma)
+
+# 2) AKURASI DATA UJI
+ramalan_test_sma <- data2$Ramalan_SMA[83:104]
+idx_te_sma <- which(!is.na(ramalan_test_sma))
+err_test_sma <- testing.ts[idx_te_sma] - ramalan_test_sma[idx_te_sma]
+
+SSE_test_sma  <- sum(err_test_sma^2)
+MSE_test_sma  <- mean(err_test_sma^2)
+MAPE_test_sma <- mean(abs(err_test_sma / testing.ts[idx_te_sma]) * 100)
+
+akurasi_test_sma <- c(SSE = SSE_test_sma,
+                      MSE = MSE_test_sma,
+                      MAPE = MAPE_test_sma)
+
+# 3) Tampilkan ringkas
+round(rbind(Train = akurasi_train_sma,
+            Test  = akurasi_test_sma), 4)
+```
+
+Dalam hal ini nilai MAPE data latih pada metode pemulusan SMA 1.4%, nilai ini dapat dikategorikan sebagai nilai akurasi yang sangat baik. Sedangkan, perhitungan akurasi menggunakan data latih menghasilkan nilai MAPE 0.6% sehingga nilai akurasi ini dapat dikategorikan sebagai sangat baik. Nilai MAPE uji yang lebih kecil dari latih mengindikasikan model tidak menunjukkan gejala overfitting pada subset ini.
+
+
+## Double Moving Average
+```{r}
+# SMA pertama
+data2$SMA1 <- rollmean(data2$`Kurs Jual Rataan`, k=3, fill=NA, align="right")
+# SMA kedua
+data2$SMA2 <- rollmean(data2$SMA1, k=3, fill=NA, align="right")
+
+# a_t, b_t
+a_t <- 2*data2$SMA1 - data2$SMA2
+b_t <- (2/(3-1)) * (data2$SMA1 - data2$SMA2)
+
+# Ramalan DMA (lag 1)
+data2$Ramalan_DMA <- a_t + b_t
+Ramalan_DMA_lag <- c(NA, head(data2$Ramalan_DMA, -1))
+```
+
+### Plot Deret Waktu
+```{r}
+ts.plot(data2.ts, xlab="Minggu Ke-", ylab="Kurs Jual Rataan",
+        main="DMA n=3 Kurs Jual Rataan")
+lines(data2$SMA1, col="green", lwd=2)
+lines(Ramalan_DMA_lag, col="red", lwd=2)
+legend("topleft",
+       c("Data Aktual","Pemulusan (SMA1)","Ramalan DMA"),
+       lty=1, col=c("black","green","red"), cex=0.8)
+```
+
+### Akurasi DMA
+```{r}
+# 1) Buat ramalan 1-langkah ke depan (lag 1) dari Ramalan_DMA
+Ramalan_DMA_lag <- c(NA, head(data2$Ramalan_DMA, -1))
+
+# 2) AKURASI DATA LATIH
+ramalan_train_dma <- Ramalan_DMA_lag[1:82]
+idx_tr_dma <- which(!is.na(ramalan_train_dma))              # indeks yang valid (tanpa NA)
+err_train_dma <- training.ts[idx_tr_dma] - ramalan_train_dma[idx_tr_dma]
+
+SSE_train_dma  <- sum(err_train_dma^2)
+MSE_train_dma  <- mean(err_train_dma^2)
+MAPE_train_dma <- mean(abs(err_train_dma / training.ts[idx_tr_dma]) * 100)
+
+akurasi_train_dma <- c(SSE = SSE_train_dma,
+                       MSE = MSE_train_dma,
+                       MAPE = MAPE_train_dma)
+
+# 3) AKURASI DATA UJI
+ramalan_test_dma <- Ramalan_DMA_lag[83:104]
+idx_te_dma <- which(!is.na(ramalan_test_dma))
+err_test_dma <- testing.ts[idx_te_dma] - ramalan_test_dma[idx_te_dma]
+
+SSE_test_dma  <- sum(err_test_dma^2)
+MSE_test_dma  <- mean(err_test_dma^2)
+MAPE_test_dma <- mean(abs(err_test_dma / testing.ts[idx_te_dma]) * 100)
+
+akurasi_test_dma <- c(SSE = SSE_test_dma,
+                      MSE = MSE_test_dma,
+                      MAPE = MAPE_test_dma)
+
+# 4) Tampilkan ringkas (dibulatkan)
+round(rbind(Train = akurasi_train_dma,
+            Test  = akurasi_test_dma), 4)
+```
+
+Dalam hal ini nilai MAPE data latih pada metode pemulusan DMA 1.19%, nilai ini dapat dikategorikan sebagai nilai akurasi yang sangat baik. Sedangkan, perhitungan akurasi menggunakan data latih menghasilkan nilai MAPE 0.6% sehingga nilai akurasi ini dapat dikategorikan sebagai sangat baik. Nilai MAPE data uji yang lebih kecil dari latih mengindikasikan model tidak menunjukkan gejala overfitting pada subset ini. Dari hasil tersebut, didapatkan bahwa data tersebut memiliki pola tren dan terbukti dengan DMA yang lebih baik di data uji.
+
+## Double Exponential Smoothing
+
+```{r}
+h_test <- nrow(testing)
+ytest  <- as.numeric(testing$`Kurs Jual Rataan`)
+```
+
+```{r}
+# Fit 3 model
+des.1  <- HoltWinters(training.ts, gamma = FALSE, alpha = 0.2, beta = 0.2)
+des.2  <- HoltWinters(training.ts, gamma = FALSE, alpha = 0.6, beta = 0.3)
+des.opt<- HoltWinters(training.ts, gamma = FALSE)  # optimum
+```
+
+### Eksplorasi
+```{r}
+plot(des.1); plot(des.2); plot(des.opt)
+```
+
+
+### Forecast
+```{r}
+h_test <- nrow(testing)
+fc1  <- forecast(des.1,  h = h_test)
+fc2  <- forecast(des.2,  h = h_test)
+fcop <- forecast(des.opt, h = h_test)
+```
+
+### Plot Periode Uji
+```{r}
+plot(window(data2.ts, start = length(training.ts)+1),
+     main="Periode Uji: Aktual vs Forecast Holt",
+     ylab="Kurs Jual Rataan", xlab="Periode Uji")
+lines(fc1$mean,  col="blue",   lty=2)
+lines(fc2$mean,  col="red",    lty=2)
+lines(fcop$mean, col="purple", lty=2)
+legend("topleft",
+       c("Aktual","DES 0.2/0.2","DES 0.6/0.3","DES Optimum"),
+       lty=c(1,2,2,2), col=c("black","blue","red","purple"), bty="n")
+```
+Garis putus-putus turun terus karena model Holt yang  dilatih menangkap tren turun di akhir data latih. Holt tanpa musiman memproyeksikan masa depan sebagai garis lurus (tren konstan). Di data uji, setelah sempat turun, kurs berbalik naik tajam. Karena titik balik ini tidak terlihat di data latih, semua ramalan Holt ketinggalan dan berada di bawah garis aktual.
+Perbedaannya di antara tiga garis putus-putus:
+DES 0.6/0.3 (merah) menurun paling tajam → paling buruk diuji (overfit ke tren turun).
+DES 0.2/0.2 (biru) menurun lebih pelan.
+DES optimum (ungu) paling dekat dengan aktual → terbaik di uji (sesuai metrik MAPE & RMSE).
+Jadi, model Holt memproyeksikan tren menurun, padahal data uji berbalik naik menyebabkan error membesar dan membuat DES optimum lebih baik dari yang lainnya.
+
+### Akurasi Data Latih
+```{r}
+fit1  <- des.1$fitted[,1]
+fit2  <- des.2$fitted[,1]
+fitop <- des.opt$fitted[,1]
+
+idx_tr <- which(!is.na(fit1) & !is.na(fit2) & !is.na(fitop))
+
+e1_tr  <- training.ts[idx_tr] - fit1[idx_tr]
+e2_tr  <- training.ts[idx_tr] - fit2[idx_tr]
+eo_tr  <- training.ts[idx_tr] - fitop[idx_tr]
+
+SSE1_tr <- sum(e1_tr^2); MSE1_tr <- mean(e1_tr^2); MAPE1_tr <- mean(abs(e1_tr/training.ts[idx_tr])*100)
+SSE2_tr <- sum(e2_tr^2); MSE2_tr <- mean(e2_tr^2); MAPE2_tr <- mean(abs(e2_tr/training.ts[idx_tr])*100)
+SSEo_tr <- sum(eo_tr^2); MSEo_tr <- mean(eo_tr^2); MAPEo_tr <- mean(abs(eo_tr/training.ts[idx_tr])*100)
+
+akurasides_train <- rbind(
+  `des ske1` = c(SSE=SSE1_tr, MSE=MSE1_tr, MAPE=MAPE1_tr),
+  `des ske2` = c(SSE=SSE2_tr, MSE=MSE2_tr, MAPE=MAPE2_tr),
+  `des opt`  = c(SSE=SSEo_tr, MSE=MSEo_tr, MAPE=MAPEo_tr)
+)
+round(akurasides_train, 4)
+```
+
+### Akurasi Data Uji
+```{r}
+h_test <- nrow(testing)
+ytest  <- as.numeric(testing$`Kurs Jual Rataan`)
+pred1  <- as.numeric(forecast(des.1,  h=h_test)$mean)
+pred2  <- as.numeric(forecast(des.2,  h=h_test)$mean)
+predop <- as.numeric(forecast(des.opt, h=h_test)$mean)
+
+stopifnot(length(ytest)==length(pred1),
+          length(ytest)==length(pred2),
+          length(ytest)==length(predop))
+
+e1 <- ytest - pred1; e2 <- ytest - pred2; eo <- ytest - predop
+
+SSE1 <- sum(e1^2); MSE1 <- mean(e1^2); MAPE1 <- mean(abs(e1/ytest)*100)
+SSE2 <- sum(e2^2); MSE2 <- mean(e2^2); MAPE2 <- mean(abs(e2/ytest)*100)
+SSEo <- sum(eo^2); MSEo <- mean(eo^2); MAPEo <- mean(abs(eo/ytest)*100)
+
+akurasides_test <- rbind(
+  `des ske1` = c(SSE=SSE1, MSE=MSE1, MAPE=MAPE1),
+  `des ske2` = c(SSE=SSE2, MSE=MSE2, MAPE=MAPE2),
+  `des opt`  = c(SSE=SSEo, MSE=MSEo, MAPE=MAPEo)
+)
+round(akurasides_test, 4)
+```
+des ske2 fit paling baik di data latih, tapi gagal generalisasi (overfit) di data uji.
+Model akhir yang dipilih: DES optimum, karena memberi kesalahan uji paling kecil (MAPE & RMSE terendah).
+MAPE 3.06% berarti rata-rata kesalahan ramalan sekitar 3% dari nilai kurs; RMSE ≈ Rp575 menunjukkan simpangan tipikal ramalan sekitar 575 poin kurs.
+
+
+```{r}
+# RMSE untuk train & test
+RMSE1_tr <- sqrt(MSE1_tr); RMSE2_tr <- sqrt(MSE2_tr); RMSEo_tr <- sqrt(MSEo_tr)
+RMSE1    <- sqrt(MSE1);    RMSE2    <- sqrt(MSE2);    RMSEo    <- sqrt(MSEo)
+```
+
+### Ringkasan
+```{r}
+ringkas_train <- data.frame(Model = rownames(akurasides_train),
+                            RMSE  = c(RMSE1_tr, RMSE2_tr, RMSEo_tr))
+ringkas_test  <- data.frame(Model = rownames(akurasides_test),
+                            RMSE  = c(RMSE1, RMSE2, RMSEo))
+
+ringkas_train$RMSE <- round(ringkas_train$RMSE, 4)
+ringkas_test$RMSE  <- round(ringkas_test$RMSE, 4)
+
+list(
+  Akurasi_Train = round(akurasides_train, 4),
+  Akurasi_Test  = round(akurasides_test, 4),
+  RMSE_Train    = ringkas_train,
+  RMSE_Test     = ringkas_test
+)
+```
