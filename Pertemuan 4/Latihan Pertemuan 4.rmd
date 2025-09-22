@@ -1,1 +1,407 @@
+---
+title: "Latihan Pertemuan 4"
+author: "Atha Nabilah Rosyadi"
+date: "2025-09-22"
+output: 
+  rmdformats::readthedown:
+    toc_depth: 2      
+    number_sections: false
+    self_contained: true
+    highlight: kate
+    thumbnails: false
+---
+
+## Library
+```{r}
+library(forecast)
+library(TSA)
+library(tseries)
+```
+
+# MA(2)
+## MA(2) Manual
+```{r}
+set.seed(1234)
+n  <- 300
+wn <- rnorm(n)         
+
+ma2_manual <- rep(0, n)
+ma2_manual[1] <- wn[1]                        # Y1 = e1
+ma2_manual[2] <- wn[2] + 0.4*wn[1]            # Y2 = e2 + 0.4 e1
+
+for(i in 3:n){
+  ma2_manual[i] <- wn[i] + 0.4*wn[i-1] + 0.6*wn[i-2]
+}
+
+ma2_manual
+```
+
+## MA(2) arima.sim
+```{r}
+theta <- c(0.4, 0.6)
+ma <- arima.sim(model = list(ma = theta), n = n)
+```
+
+## Plot Time Series
+```{r}
+ts.plot(ma2_manual, main = "Time Series MA(2) Manual")
+```
+
+```{r}
+ts.plot(ma, main = "Time Series MA(2) arima.sim")
+```
+
+## Plot ACF, PACF, EACF
+```{r}
+acf(ma2_manual, main = "ACF MA(2) Manual")
+acf(ma, main = "ACF MA(2) arima.sim")
+pacf(ma2_manual, main = "PACF MA(2) Manual")
+pacf(ma, main = "PACF MA(2) arima.sim")
+TSA::eacf(ma2_manual)
+TSA::eacf(ma)
+```
+
+## Scatterplot
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$ Manual
+```{r}
+yt_ma_manual   <- ma2_manual[-1]                 
+yt_1_ma_manual <- ma2_manual[-length(ma2_manual)] 
+plot(y = yt_ma_manual, x = yt_1_ma_manual,
+     main = "MA(2) manual: Yt vs Yt-1", xlab = "Y_{t-1}", ylab = "Y_t")
+cor(yt_ma_manual, yt_1_ma_manual)
+```
+
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$ Manual
+```{r}
+yt_ma2_manual  <- ma2_manual[-c(1,2)]                             
+yt_2_ma_manual <- ma2_manual[-c((length(ma2_manual)-1), length(ma2_manual))]  
+plot(y = yt_ma2_manual, x = yt_2_ma_manual,
+     main = "MA(2) manual: Yt vs Yt-2", xlab = "Y_{t-2}", ylab = "Y_t")
+cor(yt_ma2_manual, yt_2_ma_manual)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$ Manual
+```{r}
+yt_ma3_manual  <- ma2_manual[-c(1,2,3)]                       
+yt_3_ma_manual <- ma2_manual[-c((length(ma2_manual)-2):length(ma2_manual))]   
+plot(y = yt_ma3_manual, x = yt_3_ma_manual,
+     main = "MA(2) manual: Yt vs Yt-3", xlab = "Y_{t-3}", ylab = "Y_t")
+cor(yt_ma3_manual, yt_3_ma_manual)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$ arima.sim
+```{r}
+yt_ma   <- ma[-1]                 # Y_t
+yt_1_ma <- ma[-length(ma)]        # Y_{t-1}
+plot(y = yt_ma, x = yt_1_ma,
+     main = "MA(2) arima.sim: Yt vs Yt-1", xlab = "Y_{t-1}", ylab = "Y_t")
+cor(yt_ma, yt_1_ma)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$ arima.sim
+```{r}
+yt_ma2  <- ma[-c(1,2)]                              # Y_t
+yt_2_ma <- ma[-c((length(ma)-1), length(ma))]       # Y_{t-2}
+plot(y = yt_ma2, x = yt_2_ma,
+     main = "MA(2) arima.sim: Yt vs Yt-2", xlab = "Y_{t-2}", ylab = "Y_t")
+cor(yt_ma2, yt_2_ma)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$ arima.sim
+```{r}
+yt_ma3  <- ma[-c(1,2,3)]                            # Y_t
+yt_3_ma <- ma[-c((length(ma)-2):length(ma))]        # Y_{t-3}
+plot(y = yt_ma3, x = yt_3_ma,
+     main = "MA(2) arima.sim: Yt vs Yt-3", xlab = "Y_{t-3}", ylab = "Y_t")
+cor(yt_ma3, yt_3_ma)
+```
+
+
+## Autokorelasi
+```{r}
+theta <- c(0.4, 0.6)
+acf_theory_ma2 <- ARMAacf(ma = theta, lag.max = 10)
+acf_theory_ma2            
+acf_theory_ma2[-1]         
+```
+```{r}
+# manual
+acf(ma2_manual, lag.max = 10, plot = FALSE)$acf
+
+# arima.sim 
+acf(ma,   lag.max = 10, plot = FALSE)$acf
+```
+
+## Penjelasan
+1. Stasioneritas
+
+Semua proses MA(q) stasioner (mean & kovarians konstan).
+
+
+2.Bentuk ACF/PACF/EACF
+
+ACF: “cut-off” di lag 2 (ρₖ≈0 untuk k>2).
+
+PACF: tailing off (memudar perlahan).
+
+EACF: pola segitiga bersih di kolom q≈2 (ciri MA(2)).
+
+
+3. Scatterplot Yt vs lag
+
+Terlihat hubungan pada lag 1 & 2; nyaris hilang mulai lag 3.
+
+
+4. Autokorelasi teoritis vs manual
+
+Manual vs arima.sim (sampel ACF): keduanya mendekati nilai teoritis di lag 1–2; untuk k>2 nilai sampel berfluktuasi kecil di sekitar 0 (efek sampel terbatas). Perbedaan kecil antar “manual” dan “sim” murni karena realisasi noise acak yang berbeda.
+
+
+# AR(2)
+## AR(2) Manual
+```{r}
+set.seed(1234)
+n <- 300
+wn_ar <- rnorm(n)
+
+ar2_manual <- rep(0, n)
+ar2_manual[1:2] <- 0
+for(i in 3:n){
+  ar2_manual[i] <- 0.5*ar2_manual[i-1] + 0.2*ar2_manual[i-2] + wn_ar[i]
+}
+ar2_manual
+```
+
+## AR(2) arima.sim
+```{r}
+phi <- c(0.5, 0.2)
+ar <- arima.sim(model = list(ar = phi), n = n)
+```
+
+## Plot Time Series
+```{r}
+ts.plot(ar2_manual, main = "Time Series AR(2) Manual")
+```
+
+```{r}
+ts.plot(ar, main = "Time Series AR(2) arima.sim")
+```
+
+## Plot ACF, PACF, EACF
+```{r}
+acf(ar2_manual, main = "ACF AR(2) Manual")
+acf(ar, main = "ACF AR(2) arima.sim")
+pacf(ar2_manual, main = "PACF AR(2) Manual")
+pacf(ar, main = "PACF AR(2) arima.sim")
+TSA::eacf(ar2_manual)
+TSA::eacf(ar)
+```
+
+## Scatterplot
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$ Manual
+```{r}
+yt_ar_manual   <- ar2_manual[-1]
+yt_1_ar_manual <- ar2_manual[-length(ar2_manual)]
+plot(y = yt_ar_manual, x = yt_1_ar_manual,
+     main = "AR(2) manual: Yt vs Yt-1", xlab = "Y_{t-1}", ylab = "Y_t")
+cor(yt_ar_manual, yt_1_ar_manual)
+```
+
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$ Manual
+```{r}
+yt_ar2_manual  <- ar2_manual[-c(1,2)]
+yt_2_ar_manual <- ar2_manual[-c((length(ar2_manual)-1), length(ar2_manual))]
+plot(y = yt_ar2_manual, x = yt_2_ar_manual,
+     main = "AR(2) manual: Yt vs Yt-2", xlab = "Y_{t-2}", ylab = "Y_t")
+cor(yt_ar2_manual, yt_2_ar_manual)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$ Manual
+```{r}
+yt_ar3_manual  <- ar2_manual[-c(1,2,3)]
+yt_3_ar_manual <- ar2_manual[-c((length(ar2_manual)-2):length(ar2_manual))]
+plot(y = yt_ar3_manual, x = yt_3_ar_manual,
+     main = "AR(2) manual: Yt vs Yt-3", xlab = "Y_{t-3}", ylab = "Y_t")
+cor(yt_ar3_manual, yt_3_ar_manual)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$ arima.sim
+```{r}
+yt_ar   <- ar[-1]
+yt_1_ar <- ar[-length(ar)]
+plot(y = yt_ar, x = yt_1_ar,
+     main = "AR(2) arima.sim: Yt vs Yt-1", xlab = "Y_{t-1}", ylab = "Y_t")
+cor(yt_ar, yt_1_ar)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$ arima.sim
+```{r}
+yt_ar2  <- ar[-c(1,2)]
+yt_2_ar <- ar[-c((length(ar)-1), length(ar))]
+plot(y = yt_ar2, x = yt_2_ar,
+     main = "AR(2) arima.sim: Yt vs Yt-2", xlab = "Y_{t-2}", ylab = "Y_t")
+cor(yt_ar2, yt_2_ar)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$ arima.sim
+```{r}
+yt_ar3  <- ar[-c(1,2,3)]
+yt_3_ar <- ar[-c((length(ar)-2):length(ar))]
+plot(y = yt_ar3, x = yt_3_ar,
+     main = "AR(2) arima.sim: Yt vs Yt-3", xlab = "Y_{t-3}", ylab = "Y_t")
+cor(yt_ar3, yt_3_ar)
+```
+
+
+## Autokorelasi
+```{r}
+# Teoritis
+acf_theory_ar2 <- ARMAacf(ar = phi, lag.max = 10)
+acf_theory_ar2
+acf_theory_ar2[-1]  # lag 1..10
+
+# Sampel
+acf(ar2_manual, lag.max = 10, plot = FALSE)$acf
+acf(ar,        lag.max = 10, plot = FALSE)$acf
+```
+## Penjelasan
+1. Stasioneritas
+
+Untuk φ=(0.5,0.2), |z|≈1.312 dan 3.812
+
+2.Bentuk ACF/PACF/EACF
+
+ACF: tailing off (peluruhan halus mengarah ke nol).
+
+PACF: cut-off jelas di lag 2 (ciri AR(2)).
+
+EACF: baris p≈2 bersih.
+
+3. Scatterplot Yt vs lag
+
+Korelasi paling kuat di lag 1 & 2, melemah sesudahnya.
+
+4. Autokorelasi teoritis vs manual
+
+Manual vs arima.sim: sampel ACF dari keduanya sangat mirip dan mengikuti peluruhan teoritis; beda tipis karena variasi acak.
+
+
+# ARMA(2,2)
+## ARMA(2,2) Manual
+```{r}
+set.seed(1234)
+n <- 300
+wn_arma <- rnorm(n)
+
+arma22_manual <- rep(0, n)
+arma22_manual[1] <- wn_arma[1]
+arma22_manual[2] <- 0.5*arma22_manual[1] + wn_arma[2] + 0.4*wn_arma[1]
+for(i in 3:n){
+  arma22_manual[i] <- 0.5*arma22_manual[i-1] + 0.2*arma22_manual[i-2] +
+                      wn_arma[i] + 0.4*wn_arma[i-1] + 0.6*wn_arma[i-2]
+}
+arma22_manual
+```
+
+## ARMA(2,2) arima.sim
+```{r}
+phi   <- c(0.5, 0.2)
+theta <- c(0.4, 0.6)
+arma  <- arima.sim(model = list(ar = phi, ma = theta), n = n)
+```
+
+## Plot Time Series
+```{r}
+ts.plot(arma22_manual, main = "Time Series ARMA(2,2) Manual")
+```
+
+```{r}
+ts.plot(arma, main = "Time Series ARMA(2,2) arima.sim")
+```
+
+## Plot ACF, PACF, EACF
+```{r}
+acf(arma22_manual, main = "ACF ARMA(2,2) Manual")
+acf(arma,           main = "ACF ARMA(2,2) arima.sim")
+pacf(arma22_manual, main = "PACF ARMA(2,2) Manual")
+pacf(arma,           main = "PACF ARMA(2,2) arima.sim")
+TSA::eacf(arma22_manual)
+TSA::eacf(arma)
+```
+
+## Scatterplot
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$ Manual
+```{r}
+yt_a_manual   <- arma22_manual[-1]
+yt_1_a_manual <- arma22_manual[-length(arma22_manual)]
+plot(y = yt_a_manual, x = yt_1_a_manual,
+     main = "ARMA(2,2) manual: Yt vs Yt-1", xlab = "Y_{t-1}", ylab = "Y_t")
+cor(yt_a_manual, yt_1_a_manual)
+```
+
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$ Manual
+```{r}
+yt_a2_manual  <- arma22_manual[-c(1,2)]
+yt_2_a_manual <- arma22_manual[-c((length(arma22_manual)-1), length(arma22_manual))]
+plot(y = yt_a2_manual, x = yt_2_a_manual,
+     main = "ARMA(2,2) manual: Yt vs Yt-2", xlab = "Y_{t-2}", ylab = "Y_t")
+cor(yt_a2_manual, yt_2_a_manual)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$ Manual
+```{r}
+yt_a3_manual  <- arma22_manual[-c(1,2,3)]
+yt_3_a_manual <- arma22_manual[-c((length(arma22_manual)-2):length(arma22_manual))]
+plot(y = yt_a3_manual, x = yt_3_a_manual,
+     main = "ARMA(2,2) manual: Yt vs Yt-3", xlab = "Y_{t-3}", ylab = "Y_t")
+cor(yt_a3_manual, yt_3_a_manual)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$ arima.sim
+```{r}
+yt_a   <- arma[-1]
+yt_1_a <- arma[-length(arma)]
+plot(y = yt_a, x = yt_1_a,
+     main = "ARMA(2,2) arima.sim: Yt vs Yt-1", xlab = "Y_{t-1}", ylab = "Y_t")
+cor(yt_a, yt_1_a)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$ arima.sim
+```{r}
+yt_a2  <- arma[-c(1,2)]
+yt_2_a <- arma[-c((length(arma)-1), length(arma))]
+plot(y = yt_a2, x = yt_2_a,
+     main = "ARMA(2,2) arima.sim: Yt vs Yt-2", xlab = "Y_{t-2}", ylab = "Y_t")
+cor(yt_a2, yt_2_a)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$ arima.sim
+```{r}
+yt_a3  <- arma[-c(1,2,3)]
+yt_3_a <- arma[-c((length(arma)-2):length(arma))]
+plot(y = yt_a3, x = yt_3_a,
+     main = "ARMA(2,2) arima.sim: Yt vs Yt-3", xlab = "Y_{t-3}", ylab = "Y_t")
+cor(yt_a3, yt_3_a)
+```
+
+
+## Autokorelasi
+```{r}
+# Teoritis
+acf_theory_arma22 <- ARMAacf(ar = phi, ma = theta, lag.max = 10)
+acf_theory_arma22
+acf_theory_arma22[-1]  # lag 1..10
+
+# Sampel
+acf(arma22_manual, lag.max = 10, plot = FALSE)$acf
+acf(arma,           lag.max = 10, plot = FALSE)$acf
+```
+## Penjelasan
+1. Stasioneritas
+
+Stasioner jika akar polinom AR di luar lingkaran satuan (ya, sama seperti AR(2) di atas).
+
+2.Bentuk ACF/PACF/EACF
+
+ACF & PACF: keduanya tailing off (tidak ada cut-off tajam) karena ada komponen AR dan MA.
+
+EACF: pola “wedge” mengarah ke (p,q)≈(2,2).
+
+
+3. Scatterplot Yt vs lag
+
+Hubungan pada lag pendek terlihat, tetapi tidak ‘terputus’ seperti MA(2) murni atau PACF AR(2).
+
+
+4. Autokorelasi teoritis vs manual
+Manual vs arima.sim: sampel ACF dari keduanya akan sangat mirip dan mengikuti bentuk teoritis (memudar). Deviasi kecil = error sampling.
+
 
