@@ -1,1 +1,184 @@
+---
+title: "Forecast 100 Data"
+author: "Atha Nabilah Rosyadi"
+date: "2025-10-10"
+output: 
+  rmdformats::readthedown:
+    toc_depth: 2      
+    number_sections: false
+    self_contained: true
+    highlight: kate
+    thumbnails: false
+---
 
+# Impor data
+```{r}
+library("rio")
+data1 <- import("https://raw.githubusercontent.com/kamaldims/MPDW/main/Kurs%20Jual%20Rataan%20USD%20Fix.xlsx")
+```
+
+
+
+# Ambil data
+Mengambil data 209 - 312
+```{r}
+data2 <- data1[209:312, ]
+data2
+```
+
+
+
+# Ambil Kolom Nilai
+```{r}
+library(tseries)
+y <- ts(data2$`Kurs Jual Rataan`)
+```
+
+
+
+# Uji stasioneritas
+## Plot data asli
+```{r}
+plot(y, main="Plot Data Asli", col="blue", ylab="Nilai", xlab="Waktu")
+```
+
+Terlihat ada tren/lonjakan besar di sekitar pertengahan data, sekitar titik ke-50. Varians juga terlihat tidak konstan terlihat dari fluktuasi makin besar pada periode tertentu. Indikasi awal bahwa data belum stasioner.
+
+## ACF dan PACF untuk mengecek pola autokorelasi
+```{r}
+acf(y, main="ACF Data Asli")
+pacf(y, main="PACF Data Asli")
+```
+
+ACF turun perlahan atau slow decay, dari lag-1 sampai lag-5 masih tinggi lalu mengecil perlahan. Pola ini mengindikasikan bahwa belum stasioner karena ada memori jangka panjang. PACF hanya signifikan pada lag-1 kemudian cepat mendekati nol sehingga disimpulkan belum stasioner dan butuh differencing
+
+## Setelah differencing
+```{r}
+y_diff <- diff(y)
+plot(y_diff, main="Plot Data Setelah Differencing", col="red", ylab="Nilai", xlab="Waktu")
+acf(y_diff, main="ACF Data Setelah Differencing")
+pacf(y_diff, main="PACF Data Setelah Differencing")
+```
+
+Plot setelah differencing mean lebih konstan sekitar nol walaupun tetap ada lonjakan besar. Varians masih belum konstan tapi lebih baik dari data asli. ACF setelah differencing lag-1 signifikan lalu cepat turun, tidak ada slow decay lagi. PACF setelah differencing lag-1 signifikan sisanya kecil.
+
+## Uji formal
+```{r}
+adf.test(y)
+kpss.test(y) 
+```
+
+ADF test p-value = 0.04088 < 0.05 sehingga tolak H0 artinya data stasioner. KPSS test p-value = 0.1 > 0.05 sehingga gagal tolak H0 artinya data stasioner. Berdasarkan data di atas, sudah stasioner
+
+## Boxcox
+```{r}
+library(forecast)
+BoxCox.lambda(y)
+```
+
+Dilakukan uji boxcoc agar varians konstan. Hasilnya mendekati -1 sehingga diperlukan transformasi log agar varians lebih stabil
+
+## Log transform
+```{r}
+y_log <- log(y)
+```
+
+Dilakukan log transform, hasilnya varians berhasil menjadi konstan tetapi rataan menjadi tidak konstan ditunjukkan dengan ACF yang kembali slow decay sehingga saya langsung melakukan differencing di data log agar keduanya dapat konstan.
+
+## Differencing data log
+```{r}
+y_log_diff <- diff(y_log)
+```
+
+
+
+## Plot hasil log-differencing
+```{r}
+plot(y_log_diff, main="Plot Data Log + Differencing", col="red")
+```
+
+Data sudah berfluktuasi di sekitar rataan nol dengan varians yang relatif konstan. Sehingga disimpulkan data sudah konstan baik secara rataan maupun varians. 
+
+## ACF dan PACF
+```{r}
+acf(y_log_diff, main="ACF Log + Differencing")
+pacf(y_log_diff, main="PACF Log + Differencing")
+```
+
+Pada ACF lag-1 cukup besar kemudian cepat turun mendekati nol dan tidak ada lagi pola slow decay seperti sebelum differencing sehingga data sudah stasioner. Pada PACF hanya lag-1 yang signifikan dan sisanya kecil, disimpulkan pola sudah stasioner.
+
+## Uji formal
+```{r}
+library(tseries)
+adf.test(y_log_diff)   
+kpss.test(y_log_diff) 
+```
+
+ADF test p-value = 0.01 < 0.05 sehingga tolak H0 artinya data stasioner. KPSS test p-value 0.1 > 0.05 sehingga gagal tolak H0 artinya data stasioner.
+
+
+# Pemodelan
+```{r}
+library(forecast)
+library(tseries)
+
+model_arima <- Arima(y, order = c(1, 1, 1))
+summary(model_arima)
+```
+AR(1) = 0.3071, MA(1) = 0.2494
+→ nilai kurs minggu ini dipengaruhi oleh 30,7% dari perubahan minggu sebelumnya dan 24,9% dari error minggu sebelumnya.
+
+AIC = 1352.93, AICc = 1353.17, BIC = 1360.83
+→ nilai AIC relatif kecil, menandakan model ini sudah cukup efisien dibandingkan model dengan parameter berbeda.
+
+MAPE = 0.71%
+→ tingkat kesalahan relatifnya sangat kecil (kurang dari 1%), berarti akurasi model cukup tinggi untuk memprediksi data kurs mingguan.
+
+Kesimpulan tahap ini:
+Model ARIMA(1,1,1) sudah sesuai dan layak digunakan untuk peramalan karena menghasilkan error rendah dan parameter signifikan.
+
+# Model terbaik
+```{r}
+tsdisplay(residuals(model_arima))
+Box.test(residuals(model_arima), lag = 12, type = "Ljung-Box")
+```
+Hasil uji residual menunjukkan:
+
+Plot residual berfluktuasi di sekitar nol, tanpa pola tertentu.
+
+Plot ACF dan PACF residual sebagian besar berada di dalam batas kepercayaan → menandakan tidak ada autokorelasi tersisa.
+
+Uji Ljung-Box (lag = 12) menunjukkan p-value > 0.05, artinya residual bersifat acak (white noise).
+
+Kesimpulan tahap ini:
+Model ARIMA(1,1,1) adalah model terbaik, karena residualnya acak dan model sudah menangkap pola data dengan baik.
+
+# Forecast
+```{r}
+fc <- forecast(model_arima, h = 6)
+autoplot(fc)
+```
+Hasil forecast h=6 menampilkan:
+
+Garis hitam = data historis kurs jual USD mingguan.
+
+Area biru = interval kepercayaan (80% dan 95%) untuk 6 minggu ke depan.
+
+Pola hasil ramalan cenderung stabil dengan sedikit kenaikan, menandakan nilai kurs akan relatif tetap dalam beberapa minggu ke depan tanpa lonjakan besar.
+
+Interpretasi:
+Model memprediksi bahwa nilai kurs jual USD akan bergerak mendatar dengan sedikit fluktuasi kecil, menunjukkan stabilitas nilai tukar dalam jangka pendek.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Model ARIMA(1,1,1) dipilih karena hasil analisis menunjukkan bahwa data awal belum stasioner dan menjadi stasioner setelah dilakukan differencing satu kali, sehingga nilai d = 1. Pola pada grafik ACF memperlihatkan adanya spike signifikan pada lag ke-1 yang kemudian cepat menurun, menandakan keberadaan komponen MA(1), sedangkan grafik PACF menunjukkan spike signifikan hanya pada lag ke-1 sehingga terdapat komponen AR(1). Selain itu, data tidak memiliki pola musiman, sehingga tidak diperlukan unsur musiman (SARIMA). Secara statistik, model ini memberikan nilai AIC paling kecil serta residual yang bersifat acak (p-value > 0.05 pada uji Ljung-Box), yang berarti model telah mampu menangkap pola data dengan baik. Oleh karena itu, ARIMA(1,1,1) dianggap sebagai model terbaik dan paling sesuai untuk memprediksi pergerakan kurs jual USD mingguan.
